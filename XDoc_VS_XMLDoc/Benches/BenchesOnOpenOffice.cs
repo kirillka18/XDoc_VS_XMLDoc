@@ -10,12 +10,13 @@ using System.Xml.XPath;
 
 namespace XDoc_VS_XMLDoc.Benches;
 
-[MemoryDiagnoser]
+//[MemoryDiagnoser]
 public class BenchesOnOpenOffice
 {
     private string _filePath;
+    private byte[] _xmlByteArray;
 
-    private static string[,] namespaces = new string[,]
+    private static string[,] _namespaces = new string[,]
     {
             {"table", "urn:oasis:names:tc:opendocument:xmlns:table:1.0"},
             {"office", "urn:oasis:names:tc:opendocument:xmlns:office:1.0"},
@@ -51,11 +52,6 @@ public class BenchesOnOpenOffice
     public void Setup()
     {
         _filePath = "C:\\Users\\Кирилл\\source\\repos\\XDoc_VS_XMLDoc\\XDoc_VS_XMLDoc\\XmlSamples\\Receipt.ods";
-    }
-
-    [Benchmark]
-    public XmlDocument LoadXml_XmlDocument_Load()
-    {
         var stream = File.Open(_filePath, FileMode.Open);
 
         using ZipArchive zArchive = new(stream);
@@ -69,8 +65,19 @@ public class BenchesOnOpenOffice
 
         var streamXML = entry.Open();
 
+        using (var ms = new MemoryStream())
+        {
+            streamXML.CopyTo(ms);
+            _xmlByteArray = ms.ToArray();
+        }
+    }
+
+    [Benchmark]
+    public XmlDocument LoadXml_XmlDocument_Load()
+    {
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
         XmlDocument doc = new XmlDocument();
-        doc.Load(streamXML);
+        doc.Load(ms);
 
         return doc;
     }
@@ -78,47 +85,23 @@ public class BenchesOnOpenOffice
     [Benchmark]
     public XDocument LoadXml_XDocument_Load()
     {
-        var stream = File.Open(_filePath, FileMode.Open);
-
-        using ZipArchive zArchive = new(stream);
-        ZipArchiveEntry? entry = zArchive.GetEntry("content.xml");
-
-        // Проверка на правильное считывание файла
-        if (entry is null)
-        {
-            throw new InvalidOperationException();
-        }
-
-        var streamXML = entry.Open();
-
-        XDocument doc = XDocument.Load(streamXML);
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XDocument doc = XDocument.Load(ms);
 
         return doc;
     }
 
     [Benchmark]
-    public void ReadDocument_XmlDocument()
+    public void ReadXmlCellData_XmlDocument()
     {
-        var stream = File.Open(_filePath, FileMode.Open);
-
-        using ZipArchive zArchive = new(stream);
-        ZipArchiveEntry? entry = zArchive.GetEntry("content.xml");
-
-        // Проверка на правильное считывание файла
-        if (entry is null)
-        {
-            throw new InvalidOperationException();
-        }
-
-        var streamXML = entry.Open();
-
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
         XmlDocument doc = new XmlDocument();
-        doc.Load(streamXML);
+        doc.Load(ms);
 
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
 
-        for (int i = 0; i < namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(namespaces[i, 0], namespaces[i, 1]);
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
 
         DataSet odsFile = new DataSet("MyData");
 
@@ -127,28 +110,16 @@ public class BenchesOnOpenOffice
     }
 
     [Benchmark]
-    public void ReadDocument_XDocument()
+    public void ReadXmlCellData_XDocument()
     {
-        var stream = File.Open(_filePath, FileMode.Open);
-
-        using ZipArchive zArchive = new(stream);
-        ZipArchiveEntry? entry = zArchive.GetEntry("content.xml");
-
-        // Проверка на правильное считывание файла
-        if (entry is null)
-        {
-            throw new InvalidOperationException();
-        }
-
-        var streamXML = entry.Open();
-
-        XDocument doc = XDocument.Load(streamXML);
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XDocument doc = XDocument.Load(ms);
 
         var reader = doc.CreateReader();
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
 
-        for (int i = 0; i < namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(namespaces[i, 0], namespaces[i, 1]);
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
 
         var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
         // Больше nmsManager не нужен
