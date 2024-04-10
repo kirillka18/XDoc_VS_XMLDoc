@@ -1,4 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Validators;
 using Iced.Intel;
 using System.Data;
 using System.Globalization;
@@ -106,7 +107,7 @@ public class BenchesOnOpenOffice
         DataSet odsFile = new DataSet("MyData");
 
         foreach (XmlNode tableNode in doc.SelectNodes("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager))
-            odsFile.Tables.Add(this.GetSheet(tableNode, nmsManager));
+            odsFile.Tables.Add(this.GetSheet(tableNode, nmsManager, ControlType.OnlyRead));
     }
 
     [Benchmark]
@@ -125,11 +126,85 @@ public class BenchesOnOpenOffice
         // Больше nmsManager не нужен
 
         foreach (XElement node in nodes)
-            GetSheet(node);
+            GetSheet(node, ControlType.OnlyRead);
+    }
+
+    [Benchmark]
+    public void AppendXmlCellData_XmlDocument()
+    {
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XmlDocument doc = new XmlDocument();
+        doc.Load(ms);
+
+        XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
+
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+
+        DataSet odsFile = new DataSet("MyData");
+
+        foreach (XmlNode tableNode in doc.SelectNodes("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager))
+            odsFile.Tables.Add(this.GetSheet(tableNode, nmsManager, ControlType.AddCell));
+    }
+
+    [Benchmark]
+    public void AppendXmlCellData_XDocument()
+    {
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XDocument doc = XDocument.Load(ms);
+
+        var reader = doc.CreateReader();
+        XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
+
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+
+        var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
+        // Больше nmsManager не нужен
+
+        foreach (XElement node in nodes)
+            GetSheet(node, ControlType.AddCell);
+    }
+
+    [Benchmark]
+    public void RemoveXmlCellData_XmlDocument()
+    {
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XmlDocument doc = new XmlDocument();
+        doc.Load(ms);
+
+        XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
+
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+
+        DataSet odsFile = new DataSet("MyData");
+
+        foreach (XmlNode tableNode in doc.SelectNodes("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager))
+            odsFile.Tables.Add(this.GetSheet(tableNode, nmsManager, ControlType.DeleteCell));
+    }
+
+    [Benchmark]
+    public void RemoveXmlCellData_XDocument()
+    {
+        using MemoryStream ms = new MemoryStream(_xmlByteArray);
+        XDocument doc = XDocument.Load(ms);
+
+        var reader = doc.CreateReader();
+        XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
+
+        for (int i = 0; i < _namespaces.GetLength(0); i++)
+            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+
+        var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
+        // Больше nmsManager не нужен
+
+        foreach (XElement node in nodes)
+            GetSheet(node, ControlType.DeleteCell);
     }
 
     #region Доп методы по обработке OpenOfficeXML
-    private DataTable GetSheet(XmlNode tableNode, XmlNamespaceManager nmsManager)
+    private DataTable GetSheet(XmlNode tableNode, XmlNamespaceManager nmsManager, ControlType controlType)
     {
         DataTable sheet = new DataTable(tableNode.Attributes["table:name"].Value);
 
@@ -137,12 +212,12 @@ public class BenchesOnOpenOffice
 
         int rowIndex = 0;
         foreach (XmlNode rowNode in rowNodes)
-            this.GetRow(rowNode, sheet, nmsManager, ref rowIndex);
+            this.GetRow(rowNode, sheet, nmsManager, ref rowIndex, controlType);
 
         return sheet;
     }
 
-    private void GetRow(XmlNode rowNode, DataTable sheet, XmlNamespaceManager nmsManager, ref int rowIndex)
+    private void GetRow(XmlNode rowNode, DataTable sheet, XmlNamespaceManager nmsManager, ref int rowIndex, ControlType controlType)
     {
         XmlAttribute rowsRepeated = rowNode.Attributes["table:number-rows-repeated"];
         if (rowsRepeated == null || Convert.ToInt32(rowsRepeated.Value, CultureInfo.InvariantCulture) == 1)
@@ -156,7 +231,23 @@ public class BenchesOnOpenOffice
 
             int cellIndex = 0;
             foreach (XmlNode cellNode in cellNodes)
-                this.GetCell(cellNode, row, nmsManager, ref cellIndex);
+            {
+                var value = GetCell(cellNode, row, nmsManager, ref cellIndex);
+
+                // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
+                if (controlType is ControlType.AddCell)
+                {
+                    if (value is "Акт 1 о работе и оказании услуг от бригадир")
+                        rowNode.AppendChild(cellNode);
+                }
+
+                // Если запущен бенч по удалению - то удаляем только 1 ячейку в узловую строку
+                if (controlType is ControlType.DeleteCell)
+                {
+                    if (value is "Акт 1 о работе и оказании услуг от бригадир")
+                        rowNode.RemoveChild(cellNode);
+                }
+            }
 
             sheet.Rows.Add(row);
 
@@ -167,7 +258,6 @@ public class BenchesOnOpenOffice
             rowIndex += Convert.ToInt32(rowsRepeated.Value, CultureInfo.InvariantCulture);
         }
 
-        // sheet must have at least one cell
         if (sheet.Rows.Count == 0)
         {
             sheet.Rows.Add(sheet.NewRow());
@@ -175,7 +265,7 @@ public class BenchesOnOpenOffice
         }
     }
 
-    private void GetCell(XmlNode cellNode, DataRow row, XmlNamespaceManager nmsManager, ref int cellIndex)
+    private string GetCell(XmlNode cellNode, DataRow row, XmlNamespaceManager nmsManager, ref int cellIndex)
     {
         XmlAttribute cellRepeated = cellNode.Attributes["table:number-columns-repeated"];
         string cellValue = this.ReadCellValue(cellNode);
@@ -204,6 +294,7 @@ public class BenchesOnOpenOffice
         {
             cellIndex += repeats;
         }
+        return cellValue;
     }
 
     private string ReadCellValue(XmlNode cell)
@@ -218,31 +309,20 @@ public class BenchesOnOpenOffice
     #endregion
 
     #region Доп методы по обработке OpenOfficeX
-    /// <summary>
-    /// Получить страницу XML документа
-    /// </summary>
-    /// <param name="tableNode">XML документ типа XNode</param>
-    /// <returns>Список ячеек страницы типа List(CalcCell)</returns>
-    public static void GetSheet(XElement tableNode)
+
+    public static void GetSheet(XElement tableNode, ControlType controlType)
     {
         XElement[] rowNodes = tableNode.Elements().Where(x => x.Name.LocalName == "table-row").ToArray();
         int rowIndex = 0;
         var calcSheet = new List<string>();
         foreach (XElement rowNode in rowNodes)
         {
-            calcSheet.AddRange(GetRow(rowNode, rowIndex));
+            calcSheet.AddRange(GetRow(rowNode, rowIndex, controlType));
             rowIndex++;
         }
-
     }
 
-    /// <summary>
-    /// Получить строку XML документа
-    /// </summary>
-    /// <param name="rowNode">XML строка типа XElement</param>
-    /// <param name="rowIndex">Номер строки</param>
-    /// <returns>Список ячеек строки типа List(CalcCell)</returns>
-    public static List<string> GetRow(XElement rowNode, int rowIndex)
+    public static List<string> GetRow(XElement rowNode, int rowIndex, ControlType controlType)
     {
         XElement[] cellNodes = rowNode.Elements().Where(x => x.Name.LocalName == "table-cell").ToArray();
         int cellIndex = 0;
@@ -251,20 +331,28 @@ public class BenchesOnOpenOffice
         foreach (XElement cellNode in cellNodes)
         {
             // решение для обычных ячеек
-            calcRow.Add(GetCell(cellNode, rowIndex, cellIndex));
+            var value = GetCell(cellNode, rowIndex, cellIndex);
+            // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
+            if (controlType is ControlType.AddCell)
+            {
+                if (value is "Акт 1 о работе и оказании услуг от бригадир")
+                    rowNode.Add(cellNode);
+            }
+
+            // Если запущен бенч по удалению - то удаляем только 1 ячейку в узловую строку
+            if (controlType is ControlType.DeleteCell)
+            {
+                if (value is "Акт 1 о работе и оказании услуг от бригадир")
+                    cellNode.Remove();
+            }
+
+            calcRow.Add(value);
             cellIndex++;
         }
 
         return calcRow;
     }
 
-    /// <summary>
-    /// Получить ячейку указанной строки
-    /// </summary>
-    /// <param name="cellNode">XML строка типа XElement</param>
-    /// <param name="rowIndex">Номер строки</param>
-    /// <param name="cellIndex">Номер ячейки</param>
-    /// <returns>Ячейка строки типа CalcCell</returns>
     public static string GetCell(XElement cellNode, int rowIndex, int cellIndex)
     {
         string? textValue = cellNode.Elements().FirstOrDefault(x => x.Name.LocalName == "p")?.Value;
