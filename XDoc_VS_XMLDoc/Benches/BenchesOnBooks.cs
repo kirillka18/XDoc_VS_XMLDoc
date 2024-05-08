@@ -13,7 +13,7 @@ public class BenchesOnBooks
     [GlobalSetup]
     public void Setup()
     {
-        _filePath = "C:\\Users\\Кирилл\\source\\repos\\XDoc_VS_XMLDoc\\XDoc_VS_XMLDoc\\XmlSamples\\books.xml";
+        _filePath = "XmlSamples\\books.xml";
         _xmlByteArray = File.ReadAllBytes(_filePath);
     }
 

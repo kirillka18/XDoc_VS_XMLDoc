@@ -13,7 +13,7 @@ public class BenchesOnKladr
     [GlobalSetup]
     public void Setup()
     {
-        _filePath = "C:\\Users\\Кирилл\\source\\repos\\XDoc_VS_XMLDoc\\XDoc_VS_XMLDoc\\XmlSamples\\AS_HOUSES_PARAMS_20240425.XML";
+        _filePath = "XmlSamples\\AS_HOUSES_PARAMS_20240425.XML";
         _xmlByteArray = File.ReadAllBytes(_filePath);
     }
 

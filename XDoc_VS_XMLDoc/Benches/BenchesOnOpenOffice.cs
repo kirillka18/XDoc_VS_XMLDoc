@@ -11,13 +11,13 @@ using System.Xml.XPath;
 
 namespace XDoc_VS_XMLDoc.Benches;
 
-//[MemoryDiagnoser]
+[MemoryDiagnoser]
 public class BenchesOnOpenOffice
 {
     private string _filePath;
     private byte[] _xmlByteArray;
 
-    private static string[,] _namespaces = new string[,]
+    private static Dictionary<string,string> _namespaces = new Dictionary<string, string>
     {
             {"table", "urn:oasis:names:tc:opendocument:xmlns:table:1.0"},
             {"office", "urn:oasis:names:tc:opendocument:xmlns:office:1.0"},
@@ -52,7 +52,7 @@ public class BenchesOnOpenOffice
     [GlobalSetup]
     public void Setup()
     {
-        _filePath = "C:\\Users\\Кирилл\\source\\repos\\XDoc_VS_XMLDoc\\XDoc_VS_XMLDoc\\XmlSamples\\Receipt.ods";
+        _filePath = "XmlSamples\\Receipt.ods";
         var stream = File.Open(_filePath, FileMode.Open);
 
         using ZipArchive zArchive = new(stream);
@@ -101,8 +101,8 @@ public class BenchesOnOpenOffice
 
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string,string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         DataSet odsFile = new DataSet("MyData");
 
@@ -119,8 +119,8 @@ public class BenchesOnOpenOffice
         var reader = doc.CreateReader();
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string, string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
         // Больше nmsManager не нужен
@@ -138,8 +138,8 @@ public class BenchesOnOpenOffice
 
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string, string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         DataSet odsFile = new DataSet("MyData");
 
@@ -156,8 +156,8 @@ public class BenchesOnOpenOffice
         var reader = doc.CreateReader();
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string, string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
         // Больше nmsManager не нужен
@@ -175,8 +175,8 @@ public class BenchesOnOpenOffice
 
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(doc.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string, string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         DataSet odsFile = new DataSet("MyData");
 
@@ -193,8 +193,8 @@ public class BenchesOnOpenOffice
         var reader = doc.CreateReader();
         XmlNamespaceManager nmsManager = new XmlNamespaceManager(reader.NameTable);
 
-        for (int i = 0; i < _namespaces.GetLength(0); i++)
-            nmsManager.AddNamespace(_namespaces[i, 0], _namespaces[i, 1]);
+        foreach (KeyValuePair<string, string> eachNamespace in _namespaces)
+            nmsManager.AddNamespace(eachNamespace.Key, eachNamespace.Value);
 
         var nodes = doc.XPathSelectElements("/office:document-content/office:body/office:spreadsheet/table:table", nmsManager);
         // Больше nmsManager не нужен
@@ -220,7 +220,7 @@ public class BenchesOnOpenOffice
     private void GetRow(XmlNode rowNode, DataTable sheet, XmlNamespaceManager nmsManager, ref int rowIndex, ControlType controlType)
     {
         XmlAttribute rowsRepeated = rowNode.Attributes["table:number-rows-repeated"];
-        if (rowsRepeated == null || Convert.ToInt32(rowsRepeated.Value, CultureInfo.InvariantCulture) == 1)
+        if (rowsRepeated == null || int.Parse(rowsRepeated.Value, CultureInfo.InvariantCulture) == 1)
         {
             while (sheet.Rows.Count < rowIndex)
                 sheet.Rows.Add(sheet.NewRow());
@@ -232,7 +232,7 @@ public class BenchesOnOpenOffice
             int cellIndex = 0;
             foreach (XmlNode cellNode in cellNodes)
             {
-                var value = GetCell(cellNode, row, nmsManager, ref cellIndex);
+                var value = GetCell(cellNode, row, ref cellIndex);
 
                 // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
                 if (controlType is ControlType.AddCell)
@@ -255,7 +255,7 @@ public class BenchesOnOpenOffice
         }
         else
         {
-            rowIndex += Convert.ToInt32(rowsRepeated.Value, CultureInfo.InvariantCulture);
+            rowIndex += int.Parse(rowsRepeated.Value, CultureInfo.InvariantCulture);
         }
 
         if (sheet.Rows.Count == 0)
@@ -265,7 +265,7 @@ public class BenchesOnOpenOffice
         }
     }
 
-    private string GetCell(XmlNode cellNode, DataRow row, XmlNamespaceManager nmsManager, ref int cellIndex)
+    private string GetCell(XmlNode cellNode, DataRow row, ref int cellIndex)
     {
         XmlAttribute cellRepeated = cellNode.Attributes["table:number-columns-repeated"];
         string cellValue = this.ReadCellValue(cellNode);
@@ -273,7 +273,7 @@ public class BenchesOnOpenOffice
         int repeats = 1;
         if (cellRepeated != null)
         {
-            repeats = Convert.ToInt32(cellRepeated.Value, CultureInfo.InvariantCulture);
+            repeats = int.Parse(cellRepeated.Value, CultureInfo.InvariantCulture);
         }
 
         if (!String.IsNullOrEmpty(cellValue))
@@ -302,7 +302,7 @@ public class BenchesOnOpenOffice
         XmlAttribute cellVal = cell.Attributes["office:value"];
 
         if (cellVal == null)
-            return String.IsNullOrEmpty(cell.InnerText) ? null : cell.InnerText;
+            return cell.InnerText;
         else
             return cellVal.Value;
     }
@@ -313,25 +313,22 @@ public class BenchesOnOpenOffice
     public static void GetSheet(XElement tableNode, ControlType controlType)
     {
         XElement[] rowNodes = tableNode.Elements().Where(x => x.Name.LocalName == "table-row").ToArray();
-        int rowIndex = 0;
         var calcSheet = new List<string>();
         foreach (XElement rowNode in rowNodes)
         {
-            calcSheet.AddRange(GetRow(rowNode, rowIndex, controlType));
-            rowIndex++;
+            calcSheet.AddRange(GetRow(rowNode, controlType));
         }
     }
 
-    public static List<string> GetRow(XElement rowNode, int rowIndex, ControlType controlType)
+    public static List<string> GetRow(XElement rowNode, ControlType controlType)
     {
         XElement[] cellNodes = rowNode.Elements().Where(x => x.Name.LocalName == "table-cell").ToArray();
-        int cellIndex = 0;
         var calcRow = new List<string>();
 
         foreach (XElement cellNode in cellNodes)
         {
             // решение для обычных ячеек
-            var value = GetCell(cellNode, rowIndex, cellIndex);
+            var value = GetCell(cellNode);
             // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
             if (controlType is ControlType.AddCell)
             {
@@ -347,13 +344,12 @@ public class BenchesOnOpenOffice
             }
 
             calcRow.Add(value);
-            cellIndex++;
         }
 
         return calcRow;
     }
 
-    public static string GetCell(XElement cellNode, int rowIndex, int cellIndex)
+    public static string GetCell(XElement cellNode)
     {
         string? textValue = cellNode.Elements().FirstOrDefault(x => x.Name.LocalName == "p")?.Value;
         return textValue;
