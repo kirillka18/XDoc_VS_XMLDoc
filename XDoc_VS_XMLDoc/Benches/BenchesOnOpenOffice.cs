@@ -1,6 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Validators;
 using Iced.Intel;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Data;
 using System.Globalization;
 using System.IO.Compression;
@@ -312,41 +313,33 @@ public class BenchesOnOpenOffice
 
     public static void GetSheet(XElement tableNode, ControlType controlType)
     {
-        XElement[] rowNodes = tableNode.Elements().Where(x => x.Name.LocalName == "table-row").ToArray();
-        var calcSheet = new List<string>();
-        foreach (XElement rowNode in rowNodes)
-        {
-            calcSheet.AddRange(GetRow(rowNode, controlType));
-        }
+        var calcSheet = tableNode.Elements()
+                            .Where(x => x.Name.LocalName == "table-row")
+                            .SelectMany(x => GetRow(x, controlType))
+                            .ToList();
+    // Тут можно вернуть CalcSheet, но для бенча - мне это не нужно.
     }
 
     public static List<string> GetRow(XElement rowNode, ControlType controlType)
     {
-        XElement[] cellNodes = rowNode.Elements().Where(x => x.Name.LocalName == "table-cell").ToArray();
-        var calcRow = new List<string>();
-
-        foreach (XElement cellNode in cellNodes)
+        var cellValues = rowNode.Elements()
+                            .Where(x => x.Name.LocalName == "table-cell")
+                            .Select(GetCell)
+                            .ToList();
+        
+        // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
+        if (controlType is ControlType.AddCell)
         {
-            // решение для обычных ячеек
-            var value = GetCell(cellNode);
-            // Если запущен бенч по добавлению - то дублируем только 1 ячейку в узловую строку
-            if (controlType is ControlType.AddCell)
-            {
-                if (value is "Акт 1 о работе и оказании услуг от бригадир")
-                    rowNode.Add(cellNode);
-            }
-
-            // Если запущен бенч по удалению - то удаляем только 1 ячейку в узловую строку
-            if (controlType is ControlType.DeleteCell)
-            {
-                if (value is "Акт 1 о работе и оказании услуг от бригадир")
-                    cellNode.Remove();
-            }
-
-            calcRow.Add(value);
+            rowNode.Add(rowNode.Elements().FirstOrDefault());
         }
 
-        return calcRow;
+        // Если запущен бенч по удалению - то удаляем только 1 ячейку
+        if (controlType is ControlType.DeleteCell)
+        {
+            rowNode.Elements().FirstOrDefault().Remove();
+        }
+
+        return cellValues;
     }
 
     public static string GetCell(XElement cellNode)
