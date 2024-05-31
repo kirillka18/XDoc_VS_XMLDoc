@@ -311,13 +311,12 @@ public class BenchesOnOpenOffice
 
     #region Доп методы по обработке OpenOfficeX
 
-    public static void GetSheet(XElement tableNode, ControlType controlType)
+    public static List<string> GetSheet(XElement tableNode, ControlType controlType)
     {
-        var calcSheet = tableNode.Elements()
+        return tableNode.Elements()
                             .Where(x => x.Name.LocalName == "table-row")
                             .SelectMany(x => GetRow(x, controlType))
                             .ToList();
-    // Тут можно вернуть CalcSheet, но для бенча - мне это не нужно.
     }
 
     public static List<string> GetRow(XElement rowNode, ControlType controlType)
